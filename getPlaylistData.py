@@ -11,7 +11,7 @@ import time
 from spotipy.oauth2 import SpotifyClientCredentials
 
 
-client_credentials_manager = SpotifyClientCredentials(client_id='', client_secret='')
+client_credentials_manager = SpotifyClientCredentials(client_id='insert_id', client_secret='insert_secret')
 
 
 def show_tracks(tracks):
