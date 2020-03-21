@@ -1,0 +1,5 @@
+# Ignore Jupyter checkpoints folder
+.ipynb_checkpoints
+
+# Ignore git attributes
+.gitattributes
