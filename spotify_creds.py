@@ -8,6 +8,7 @@ client_secret = 'your-client-secret'
 username = 'your-username'
 scope = 'user-library-read'
 redirect_uri = 'http://127.0.0.1:8081/'
+# optional values to adjust scope
 # ,playlist-modify-private,playlist-modify-public
 
 class spotifyCreds():

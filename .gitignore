@@ -3,3 +3,8 @@
 
 # Ignore git attributes
 .gitattributes
+
+# Not ready to be added to git
+hot_one_hundred_audio_features.xlsx
+hot_stuff.csv
+billboard-hot-100analysis.r
