@@ -8,7 +8,7 @@ import spotipy
 import spotipy.util as util
 import pandas as pd
 import time
-from spotifyCreds import spotifyCreds
+from spotify_creds import spotifyCreds
 
 # With much help from
 # https://github.com/SylCard/Spotify-Emotions-Project

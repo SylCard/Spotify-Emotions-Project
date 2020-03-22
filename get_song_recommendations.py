@@ -3,7 +3,7 @@ import sys
 import spotipy
 from pprint import pprint
 from getFeaturesFromPublicPlaylists import write_to_csv
-from spotifyCreds import spotifyCreds
+from spotify_creds import spotifyCreds
 
 ''' Returns a list of recommended songs to listen to
 Below are example commands with arguments to return song recommendations, returns 20 songs each
