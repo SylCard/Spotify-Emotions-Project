@@ -102,7 +102,7 @@ def main(username, loop, offset):
     print ("Retrieving audio features from tracks")
     tracks_with_features = get_features(tracks, sp)
     print ("Storing de-duplicated tracks into a CSV file")
-    write_to_csv(tracks_with_features, 'deduplicated_tracks_from_my_playlists-01.csv')
+    write_to_csv(tracks_with_features, 'deduplicated_tracks_from_my_playlists.csv')
 
 
 if __name__ == '__main__':
