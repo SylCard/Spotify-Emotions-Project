@@ -1,0 +1,412 @@
+---
+title: "Project 3"
+author: "Elijah Hawk"
+date: "03/22/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+This R Notebook is divided into multiple sections. Each section is divided in such a way to make reading through it as easy, clear, and concise as possible. :)
+
+##  Exploratory Data Analysis
+### Creating new data out of existing data
+
+```{r, warning = FALSE}
+library(readr)
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(magrittr)
+library(cowplot)
+library(caret)
+library(lattice)
+library(MASS)
+library(pROC)
+
+setwd("C:/Users/My Computer/Git/spotify-capstone")
+
+spotifyMusic = as.data.frame(read_xlsx("hot_one_hundred_audio_features.xlsx"))
+
+dim(spotifyMusic)
+
+#### Visualizing NAs ####
+missing_data <- spotifyMusic %>% summarise_all(funs(sum(is.na(.))/n()))
+missing_data <- gather(missing_data, key = "variables", value = "percent_missing")
+ggplot(missing_data, aes(x = reorder(variables, percent_missing), y = percent_missing)) +
+  geom_bar(stat = "identity", fill = "red", aes(color = I('white')), size = 0.3)+
+  xlab('variables')+
+  coord_flip()+ 
+  theme_bw()
+
+spotifyMusic = na.omit(spotifyMusic)
+
+dim(spotifyMusic)
+
+# drop unnecessary observations
+spotifyMusic$SongID = NULL
+spotifyMusic$Performer = NULL
+spotifyMusic$Song = NULL
+spotifyMusic$spotify_genre = NULL
+spotifyMusic$spotify_track_id = NULL
+spotifyMusic$spotify_track_preview_url = NULL
+spotifyMusic$spotify_track_album = NULL
+
+dim(spotifyMusic)
+
+#### generate new observations by setting thresholds for determining kinds of music ####
+spotifyMusic$is_energetic = factor(ifelse(spotifyMusic$energy >=0.5, "1", "0"))
+spotifyMusic$is_danceful = factor(ifelse(spotifyMusic$danceability >=0.5, "1", "0"))
+spotifyMusic$is_speechy = factor(ifelse(spotifyMusic$speechiness >=0.5, "1", "0"))
+spotifyMusic$is_acoustic = factor(ifelse(spotifyMusic$acousticness >=0.5, "1", "0"))
+spotifyMusic$is_live = factor(ifelse(spotifyMusic$liveness >=0.5, "1", "0"))
+spotifyMusic$is_positive = factor(ifelse(spotifyMusic$valence >=0.5, "1", "0"))
+spotifyMusic$is_loud = factor(ifelse(spotifyMusic$loudness <=-11, "1", "0"))
+spotifyMusic$is_popular = factor(ifelse(spotifyMusic$spotify_track_popularity >=50, "1", "0"))
+```
+
+## Split data into train and test sets
+### Divide data into a 60/40 split
+
+```{r, warning = FALSE}
+#### Create test/train data sets using a 60/40 split ####
+set.seed(99)
+fullset <- createDataPartition(spotifyMusic$is_popular, p=0.60, list=FALSE)
+# select 60% of data to train the models
+trainset <- spotifyMusic[fullset,]
+# select 40% of the data for testing
+testset <- spotifyMusic[-fullset,]
+
+dim(trainset)
+dim(testset)
+```
+
+## Visualize Data Using ggplot
+
+```{r, warning = FALSE}
+#### Explore data through visualizations using ggplot ####
+
+# popularity and energy
+ggplot(spotifyMusic, aes(spotify_track_popularity, energy)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(x = "popularity of song", 
+       y = "song energy", 
+       subtitle = "The more popular a song is, the more energy that song contains",
+       caption = "Spotify Data | graph presented by Elijah Hawk")
+
+# popularity and valence
+ggplot(spotifyMusic, aes(spotify_track_popularity, valence)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(x = "popularity of song", 
+       y = "song positiveness", 
+       subtitle = "Less valent songs are more popular",
+       caption = "Spotify Data | graph presented by Elijah Hawk")
+
+# valence and popularity
+ggplot(spotifyMusic, aes(valence, spotify_track_popularity)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(x = "song positiveness", 
+       y = "popularity of song", 
+       subtitle = "Less valent songs are more popular",
+       caption = "Spotify Data | graph presented by Elijah Hawk")
+
+# popularity and energetic songs
+ggplot(spotifyMusic, aes(spotify_track_popularity, is_energetic)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(x = "popularity of song", 
+       y = "song is energetic", 
+       subtitle = "Energy of song compared to popularity of song",
+       caption = "Spotify Data | graph presented by Elijah Hawk")
+
+# loudness and popularity
+ggplot(spotifyMusic, aes(spotify_track_popularity, loudness)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(x = "popularity of song", 
+       y = "decibel level of song", 
+       subtitle = "The more popular a song is, the louder the song is",
+       caption = "Spotify Data | graph presented by Elijah Hawk")
+
+# tempo and popularity
+ggplot(spotifyMusic, aes(spotify_track_popularity, tempo)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(x = "song BPM", 
+       y = "popularity of song", 
+       subtitle = "The pace of the song does not determine whether a song will be popular or not",
+       caption = "Spotify Data | graph presented by Elijah Hawk")
+```
+
+## Output statistical data about components of the dataset
+
+```{r, warning = FALSE}
+### Print out statistical summaries ####
+summary(spotifyMusic$spotify_track_popularity)
+
+summary(spotifyMusic$loudness)
+
+summary(spotifyMusic$tempo)
+
+summary(spotifyMusic$valence)
+
+summary(spotifyMusic$acousticness)
+
+summary(spotifyMusic$danceability)
+
+summary(spotifyMusic$instrumentalness)
+
+```
+
+## Additional visualizations using bar charts, box plots, and violin charts
+
+```{r, warning = FALSE}
+# columns created can be visualized using bar charts
+plot_grid(ggplot(spotifyMusic, aes(x=is_energetic,fill=is_popular))+ geom_bar(position = 'fill')+ theme_bw()+
+            scale_x_discrete(labels = function(x) str_wrap(x, width = 10)), 
+          ggplot(spotifyMusic, aes(x=is_loud,fill=is_popular))+ geom_bar(position = 'fill')+theme_bw()+
+            scale_x_discrete(labels = function(x) str_wrap(x, width = 10)),
+          ggplot(spotifyMusic, aes(x=is_positive,fill=is_popular))+ geom_bar(position = 'fill')+theme_bw()+
+            scale_x_discrete(labels = function(x) str_wrap(x, width = 10)),
+          ggplot(spotifyMusic, aes(x=is_acoustic,fill=is_popular))+ geom_bar(position = 'fill')+theme_bw()+
+            scale_x_discrete(labels = function(x) str_wrap(x, width = 10)),
+          ggplot(spotifyMusic, aes(x=is_speechy,fill=is_popular))+ geom_bar(position = 'fill')+theme_bw()+
+            scale_x_discrete(labels = function(x) str_wrap(x, width = 10)),
+          ggplot(spotifyMusic, aes(x=is_danceful,fill=is_popular))+ geom_bar(position = 'fill')+theme_bw()+
+            scale_x_discrete(labels = function(x) str_wrap(x, width = 10)),align = "h")
+
+# columns created can be visualized using violin charts
+ggplot(spotifyMusic, aes(x=is_popular, y=loudness, fill=is_popular)) + geom_violin()+
+  geom_boxplot(width=0.1, fill="white") + labs(title="Loudness")
+ggplot(spotifyMusic, aes(x=is_popular, y=danceability, fill=is_popular)) + geom_violin()+
+  geom_boxplot(width=0.1, fill="white") + labs(title="Can Dance To")
+ggplot(spotifyMusic, aes(x=is_popular, y=valence, fill=is_popular)) + geom_violin()+
+  geom_boxplot(width=0.1, fill="white") + labs(title="Positiveness")
+```
+
+## OLS (Linear Regression)
+
+```{r, warning = FALSE}
+linearRegression01 = lm(spotify_track_popularity ~ .-is_popular-spotify_track_duration_ms, data = spotifyMusic)
+summary(linearRegression01)
+
+linearRegression02 = lm(spotify_track_popularity ~ .-is_popular-spotify_track_duration_ms-time_signature, data = spotifyMusic)
+summary(linearRegression02)
+```
+
+Linear regression is not a good model to use because of the fact that there is so much variation in the data. Note that the Adjusted R-squared value is only 0.2774, further explaining that while there are some song features that can explain the popularity of a song, a variety of song types/genres have the potential to be popular.
+
+## Supervised Machine Learning Techniques
+### 10-fold Cross-Validation
+
+Using 10-fold cross-validation and analyze the following models: LDA, tree, KNN, Bayesian GLM, SVM, Random Forest, and XGBoosting. To make sure we have the same result, let's have the same random procedure: set.seed(99)
+
+```{r, warning = FALSE}
+
+control = trainControl(method="cv", number=10)
+metric = "Accuracy"
+
+# Linear Discriminant Analysis (LDA)
+set.seed(99)
+fit.lda = train(as.factor(is_popular)~., data=trainset, method="lda", metric=metric, trControl=control)
+
+# Classfication and Regression Trees (CART)
+set.seed(99)
+fit.cart = train(as.factor(is_popular)~., data=trainset, method="rpart", metric=metric, trControl=control)
+
+# K-Nearest Neighbors (KNN)
+set.seed(99)
+fit.knn = train(as.factor(is_popular)~., data=trainset, method="knn", metric=metric, trControl=control)
+
+# Bayesian Generalized Linear Model 
+set.seed(99)
+fit.logi = train(as.factor(is_popular)~., data=trainset, method="bayesglm", metric=metric, trControl=control)
+
+# Support Vector Machines (SVM) --> a long long time
+set.seed(99)
+fit.svm = train(as.factor(is_popular)~., data=trainset, method="svmRadial", metric=metric, trControl=control)
+
+# Random Forest
+set.seed(99)
+fit.rf = train(as.factor(is_popular)~., data=trainset, method="rf", metric=metric, trControl=control)
+
+# Gradient Boosting Machines/XGBoost
+set.seed(99)
+fit.xgb = train(as.factor(is_popular)~., data=trainset, method="xgbLinear", metric=metric, trControl=control)
+
+# Summarize the Best Model
+# List the mean of accuracy and kappa, identify the best model to predict the whether a song is popular or not.
+# Select Best Model
+# summarize accuracy of models
+results = resamples(list(lda=fit.lda, cart=fit.cart, knn=fit.knn, logi=fit.logi, svm=fit.svm, rf=fit.rf, xgb=fit.xgb))
+summary(results)
+
+```
+
+Many of the models return high results, this is because of the fact that there is a wide variety of music types. All of these music types have the potential to be popular.
+
+## Logistic Regression
+### Finding the best model to use
+
+```{r, warning = FALSE}
+logisticRegression01 = glm(is_popular ~ ., data = trainset, family = "binomial")
+summary(logisticRegression01)
+# AIC: 46
+
+logisticRegression02 = glm(is_popular ~ .-spotify_track_popularity, data = trainset, family = "binomial")
+summary(logisticRegression02)
+# AIC: 9237.8
+# Previous model is better due to lower AIC
+
+logisticRegression03 = glm(is_popular ~ .-spotify_track_popularity-spotify_track_duration_ms, data = trainset, family = "binomial")
+summary(logisticRegression03)
+# AIC: 9252.1
+# Third model is really bad after taking out the popularity observations
+
+# Used the first regression which includes an exact measure of how popular a song is
+# Note that other regressions which remove this aspect return a much higher AIC
+logisticRegression04 = stepAIC(logisticRegression01, direction="both")
+summary(logisticRegression04)
+
+# Using step-wise AIC in both directions, we can get our AIC down to 4!
+# AIC: 4
+```
+
+## Making predictions using our logistic model
+With an incredibly low AIC, we can return extremely accurate results for determining whether a song will be popular or not
+
+```{r, warning = FALSE}
+# Performing prediction ON the spotifyMusic set created above
+myPrediction = predict(logisticRegression04, type = "response", newdata = spotifyMusic)
+summary(myPrediction)
+spotifyMusic$model_1_probability_that_song_is_popular = myPrediction
+```
+
+## Area Under Curve, Sensitivity, Specificity, and Accuracy
+
+We can use the above prediction to visualize how much of our data we can accurately cover with our prediction. Because our AIC value was so low, we know that we are going to return a high AUC. Very soon, we are going to re-run this regression with a less accurate prediction. An explanation for why we want to do this will be explained farther down.
+
+```{r, warning = FALSE}
+#### ROC Curve ####
+# AUC - area under curve
+glm.roc <- roc(response = spotifyMusic$is_popular, predictor = as.numeric(myPrediction))
+plot(glm.roc, legacy.axes = TRUE, print.auc.y = 1.0, print.auc = TRUE)
+
+# Threshold = 0.5 <- NOTE the 0.5 threshold used here in addition to the 0.5 split of partitioned train/test data
+pred_popularity = factor(ifelse(myPrediction >=0.5, "1", "0"))
+real_popularity = factor(spotifyMusic$is_popular)
+table(pred_popularity, real_popularity)
+confusionMatrix(pred_popularity, real_popularity)
+
+conf1=confusionMatrix(pred_popularity, real_popularity)
+conf1$overall[1]
+conf1$byClass[1]
+conf1$byClass[2]
+
+#### In search of an optimal threshold ####
+
+# In search of an optimal threshold
+perform_fn <- function(cutoff) 
+{
+  pred_popularity <- factor(ifelse(myPrediction >= cutoff, "1", "0"))
+  conf <- confusionMatrix(pred_popularity, real_popularity)
+  accuray <- conf$overall[1]
+  sensitivity <- conf$byClass[1]
+  specificity <- conf$byClass[2]
+  out <- t(as.matrix(c(sensitivity, specificity, accuray))) 
+  colnames(out) <- c("sensitivity", "specificity", "accuracy")
+  return(out)
+}
+s = seq(0.01,0.99,length=100)
+OUT = matrix(0,100,3)
+
+for(i in 1:100)
+{
+  OUT[i,] = perform_fn(s[i])
+} 
+
+plot(s, OUT[,1],xlab="Cutoff",ylab="Value",cex.lab=1.5,cex.axis=1.5,ylim=c(0,1),
+     type="l",lwd=2,axes=FALSE,col=2)
+axis(1,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+axis(2,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+lines(s,OUT[,2],col="darkgreen",lwd=2)
+lines(s,OUT[,3],col=4,lwd=2)
+box()
+legend("bottom",col=c(2,"darkgreen",4,"darkred"),text.font =3,inset = 0.02,
+       box.lty=0,cex = 0.8, 
+       lwd=c(2,2,2,2),c("Sensitivity","Specificity","Accuracy"))
+```
+
+Wow that is really accurate! We can make an accurate prediction because we know how popular a song is. As seen in the AIC values that returned earlier.
+
+If we remove the actual popularity value from the regression then the accuracy results will be less accurate. Let's use a less accurate model to return a more realistic model that can be used when we don't know the actual popularity value of a song.
+
+```{r, warning = FALSE}
+logisticRegression05 = stepAIC(logisticRegression02, direction="both")
+summary(logisticRegression05)
+
+# Performing prediction on the spotifyMusic set created above
+myPrediction = predict(logisticRegression05, type = "response", newdata = spotifyMusic)
+summary(myPrediction)
+spotifyMusic$model_2_probability_that_song_is_popular = myPrediction
+
+#### ROC Curve ####
+# AUC - area under curve
+glm.roc <- roc(response = spotifyMusic$is_popular, predictor = as.numeric(myPrediction))
+plot(glm.roc, legacy.axes = TRUE, print.auc.y = 1.0, print.auc = TRUE)
+
+# Threshold = 0.5 <- NOTE the 0.5 threshold used here in addition to the 0.5 split of partitioned train/test data
+pred_popularity = factor(ifelse(myPrediction >=0.5, "1", "0"))
+real_popularity = factor(spotifyMusic$is_popular)
+table(pred_popularity, real_popularity)
+confusionMatrix(pred_popularity, real_popularity)
+
+conf1=confusionMatrix(pred_popularity, real_popularity)
+conf1$overall[1]
+conf1$byClass[1]
+conf1$byClass[2]
+
+#### In search of an optimal threshold ####
+
+# In search of an optimal threshold
+perform_fn <- function(cutoff) 
+{
+  pred_popularity <- factor(ifelse(myPrediction >= cutoff, "1", "0"))
+  conf <- confusionMatrix(pred_popularity, real_popularity)
+  accuray <- conf$overall[1]
+  sensitivity <- conf$byClass[1]
+  specificity <- conf$byClass[2]
+  out <- t(as.matrix(c(sensitivity, specificity, accuray))) 
+  colnames(out) <- c("sensitivity", "specificity", "accuracy")
+  return(out)
+}
+s = seq(0.01,0.99,length=100)
+OUT = matrix(0,100,3)
+
+for(i in 1:100)
+{
+  OUT[i,] = perform_fn(s[i])
+} 
+
+plot(s, OUT[,1],xlab="Cutoff",ylab="Value",cex.lab=1.5,cex.axis=1.5,ylim=c(0,1),
+     type="l",lwd=2,axes=FALSE,col=2)
+axis(1,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+axis(2,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+lines(s,OUT[,2],col="darkgreen",lwd=2)
+lines(s,OUT[,3],col=4,lwd=2)
+box()
+legend("bottom",col=c(2,"darkgreen",4,"darkred"),text.font =3,inset = 0.02,
+       box.lty=0,cex = 0.8, 
+       lwd=c(2,2,2,2),c("Sensitivity","Specificity","Accuracy"))
+abline(v = 0.350, col="red", lwd=1, lty=2)
+```
